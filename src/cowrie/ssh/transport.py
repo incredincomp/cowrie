@@ -28,6 +28,7 @@ from cowrie.core.config import CONFIG
 class HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin):
     startTime = None
     gotVersion = False
+    ipv4rex = re.compile(r'^::ffff:(\d+\.\d+\.\d+\.\d+)$')
 
     def __repr__(self):
         """
@@ -45,8 +46,8 @@ class HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin):
         """
         self.transportId = uuid.uuid4().hex[:12]
         src_ip = self.transport.getPeer().host
-        ipv4rex = re.compile(r'^::ffff:(\d+\.\d+\.\d+\.\d+)$')
-        ipv4_search = ipv4rex.search(src_ip)
+
+        ipv4_search = self.ipv4rex.search(src_ip)
         if ipv4_search is not None:
             src_ip = ipv4_search.group(1)
 
@@ -236,5 +237,19 @@ class HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin):
             transport.SSHServerTransport.sendDisconnect(self, reason, desc)
         else:
             self.transport.write(b'Packet corrupt\n')
-            log.msg("[SERVER] - Disconnecting with error, code {}\nreason: {}".format(reason, desc))
+            log.msg("[SERVER] - Disconnecting with error, code {} reason: {}".format(reason, desc))
             self.transport.loseConnection()
+
+    def receiveError(self, reasonCode, description):
+        """
+        Called when we receive a disconnect error message from the other
+        side.
+
+        @param reasonCode: the reason for the disconnect, one of the
+                           DISCONNECT_ values.
+        @type reasonCode: L{int}
+        @param description: a human-readable description of the
+                            disconnection.
+        @type description: L{str}
+        """
+        log.msg('Got remote error, code %s reason: %s' % (reasonCode, description))
